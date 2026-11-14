@@ -1,0 +1,112 @@
+// Task runner for the Python pipeline. `./gradlew tasks` lists everything.
+//
+//   ./gradlew test          unit tests
+//   ./gradlew quick         smoke run on a small subset
+//   ./gradlew dockerTest    the same tests inside the container
+//
+// Options: -Pdevice=cpu|mps|cuda   -Ppython=<interpreter used to create .venv>
+//          -Pargs="--seed 1 ..."   extra arguments for run_pipeline.py
+
+plugins {
+    id 'base'
+}
+
+def windows = System.getProperty('os.name').toLowerCase().contains('windows')
+def venvPython = file(windows ? '.venv/Scripts/python.exe' : '.venv/bin/python')
+def bootstrapPython = providers.gradleProperty('python').getOrElse(windows ? 'python' : 'python3')
+def device = providers.gradleProperty('device').orNull
+def extraArgs = (providers.gradleProperty('args').orNull ?: '').tokenize()
+
+def onPath = { String name ->
+    (System.getenv('PATH') ?: '').split(File.pathSeparator).any { new File(it, name).canExecute() }
+}
+def haveUv = onPath('uv')
+def hostId = { String flag ->
+    windows ? '1000' : providers.exec { commandLine 'id', flag }.standardOutput.asText.get().trim()
+}
+
+// ---------------------------------------------------------------- setup ----
+
+tasks.register('createVenv', Exec) {
+    group = 'setup'
+    description = 'Create .venv'
+    onlyIf { !venvPython.exists() }
+    commandLine(haveUv ? ['uv', 'venv', '--python', '3.12', '.venv']
+                       : [bootstrapPython, '-m', 'venv', '.venv'])
+}
+
+tasks.register('installDeps', Exec) {
+    group = 'setup'
+    description = 'Install the pinned dependencies from requirements.lock into .venv'
+    dependsOn 'createVenv'
+    def marker = layout.buildDirectory.file('deps.installed')
+    inputs.file('requirements.lock')
+    outputs.file(marker)
+    commandLine(haveUv ? ['uv', 'pip', 'sync', '--python', venvPython.path, 'requirements.lock']
+                       : [venvPython.path, '-m', 'pip', 'install', '-r', 'requirements.lock'])
+    doLast { marker.get().asFile.text = 'ok\n' }
+}
+
+// ------------------------------------------------------------- pipeline ----
+
+def python = { String name, String text, List<String> arguments ->
+    tasks.register(name, Exec) {
+        group = 'pipeline'
+        description = text
+        dependsOn 'installDeps'
+        if (device) {
+            environment 'FEDUNLEARN_DEVICE', device
+        }
+        commandLine([venvPython.path] + arguments)
+    }
+}
+
+python('test', 'Run the unit tests', ['-m', 'pytest', '-q'])
+python('quick', 'Smoke run on a 3,000-image subset, written to outputs_quick/',
+       ['run_pipeline.py', '--quick'] + extraArgs)
+python('pipeline', 'Full run: train, unlearn, audit, figures, report',
+       ['run_pipeline.py'] + extraArgs)
+python('report', 'Rebuild audit, figures and report.pdf from the saved checkpoints',
+       ['run_pipeline.py', '--stage', 'report'] + extraArgs)
+python('verify', 'Re-measure accuracy and attack success with independent code',
+       ['scripts/verify_results.py'])
+python('reproCheck', 'Run the quick pipeline twice on CPU and require identical results',
+       ['scripts/repro_check.py'])
+
+tasks.named('check') {
+    dependsOn 'test'
+}
+
+// --------------------------------------------------------------- docker ----
+
+tasks.register('dockerBuild', Exec) {
+    group = 'docker'
+    description = 'Build the fedunlearn:local image'
+    commandLine 'docker', 'compose', 'build'
+}
+
+def docker = { String name, String text, List<String> command ->
+    tasks.register(name, Exec) {
+        group = 'docker'
+        description = text
+        dependsOn 'dockerBuild'
+        doFirst {
+            ['data', 'outputs', 'outputs_quick'].each { file(it).mkdirs() }
+            environment 'HOST_UID', hostId('-u')
+            environment 'HOST_GID', hostId('-g')
+        }
+        commandLine(['docker', 'compose', 'run', '--rm', 'app'] + command)
+    }
+}
+
+docker('dockerTest', 'Run the unit tests in the container', [])
+docker('dockerQuick', 'Smoke run in the container',
+       ['python', 'run_pipeline.py', '--quick'] + extraArgs)
+docker('dockerPipeline', 'Full run in the container (CPU only, takes hours)',
+       ['python', 'run_pipeline.py'] + extraArgs)
+docker('dockerReport', 'Rebuild report.pdf from the saved checkpoints in the container',
+       ['python', 'run_pipeline.py', '--stage', 'report'] + extraArgs)
+docker('dockerVerify', 'Re-measure the results in the container',
+       ['python', 'scripts/verify_results.py'])
+docker('dockerReproCheck', 'Run the determinism check in the container',
+       ['python', 'scripts/repro_check.py'])
