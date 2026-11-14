@@ -1,0 +1,52 @@
+[
+  {
+    "round": 30,
+    "test_acc": 0.4775,
+    "asr": 0.0,
+    "seconds": 4.63617205619812,
+    "phase": "ascent",
+    "forget_acc": 0.0958,
+    "stopped_early": true,
+    "pga_epochs": 1
+  },
+  {
+    "round": 31,
+    "test_acc": 0.7803,
+    "asr": 0.03233333304524422,
+    "seconds": 38.42788314819336,
+    "lr": 0.01,
+    "phase": "recovery"
+  },
+  {
+    "round": 32,
+    "test_acc": 0.7908,
+    "asr": 0.03522222116589546,
+    "seconds": 38.80489802360535,
+    "lr": 0.01,
+    "phase": "recovery"
+  },
+  {
+    "round": 33,
+    "test_acc": 0.8029,
+    "asr": 0.03133333474397659,
+    "seconds": 38.44255208969116,
+    "lr": 0.01,
+    "phase": "recovery"
+  },
+  {
+    "round": 34,
+    "test_acc": 0.8065,
+    "asr": 0.03766666725277901,
+    "seconds": 38.24848914146423,
+    "lr": 0.01,
+    "phase": "recovery"
+  },
+  {
+    "round": 35,
+    "test_acc": 0.8069,
+    "asr": 0.03733333200216293,
+    "seconds": 41.67998385429382,
+    "lr": 0.01,
+    "phase": "recovery"
+  }
+]
