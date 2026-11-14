@@ -1,0 +1,11 @@
+.venv/
+data/
+outputs_quick/
+outputs/report/
+.gradle/
+build/
+__pycache__/
+*.pyc
+.pytest_cache/
+.playwright-mcp/
+.DS_Store
