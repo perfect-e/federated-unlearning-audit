@@ -1,0 +1,13 @@
+# docker compose run --rm app                                         unit tests
+# docker compose run --rm app python run_pipeline.py --quick          smoke run
+# docker compose run --rm app python run_pipeline.py --stage report   rebuild the PDF
+# docker compose run --rm app python run_pipeline.py                  full run (CPU, hours)
+services:
+  app:
+    build: .
+    image: fedunlearn:local
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./outputs_quick:/app/outputs_quick

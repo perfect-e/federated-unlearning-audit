@@ -1,0 +1,9 @@
+*
+!requirements.lock
+!run_pipeline.py
+!fedunlearn/
+!report_template/
+!scripts/
+!tests/
+**/__pycache__
+**/*.pyc
